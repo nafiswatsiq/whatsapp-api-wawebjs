@@ -5,3 +5,4 @@ logs
 media
 sessions
 .env
+prompt-logs
