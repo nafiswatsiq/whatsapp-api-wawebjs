@@ -398,7 +398,7 @@ class WhatsAppService {
     } else {
       messageMedia = new MessageMedia(
         media.mimetype,
-        typeof media.data === 'string' ? media.data : media.data.toString('base64'),
+        typeof media.data === 'string' ? media.data : String(media.data),
         media.filename
       );
     }
@@ -552,7 +552,7 @@ class WhatsAppService {
       // It's already a MessageMedia object or compatible format
       messageMedia = new MessageMedia(
         media.mimetype,
-        typeof media.data === 'string' ? media.data : media.data.toString('base64'),
+        typeof media.data === 'string' ? media.data : String(media.data),
         media.filename
       );
     }
