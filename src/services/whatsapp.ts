@@ -4,12 +4,14 @@ import fs from 'fs';
 import path from 'path';
 import config from '../config';
 import { WhatsAppClient, ClientInfo, DownloadedMedia, MessageLog } from '../types';
+import { aiServices } from './ai-services';
 
 class WhatsAppService {
   private clients: Map<string, WhatsAppClient>;
   private readonly CLEANUP_INTERVAL = 120000; // 2 minutes in milliseconds
   private readonly MEDIA_DIR = path.join(process.cwd(), 'media');
   private readonly LOGS_DIR = path.join(process.cwd(), 'logs');
+  private readonly PROMPT_LOG_DIR = path.join(process.cwd(), 'prompt-logs');
 
   constructor() {
     this.clients = new Map();
@@ -26,6 +28,9 @@ class WhatsAppService {
     }
     if (!fs.existsSync(this.LOGS_DIR)) {
       fs.mkdirSync(this.LOGS_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(this.PROMPT_LOG_DIR)) {
+      fs.mkdirSync(this.PROMPT_LOG_DIR, { recursive: true });
     }
   }
 
@@ -105,7 +110,7 @@ class WhatsAppService {
   /**
     * Get message type from mimetype
     */
-  private getMessageType(mimetype: string): 'text' | 'image' | 'video' | 'audio' | 'document' {
+  public getMessageType(mimetype: string): 'text' | 'image' | 'video' | 'audio' | 'document' {
     if (mimetype.startsWith('image/')) return 'image';
     if (mimetype.startsWith('video/')) return 'video';
     if (mimetype.startsWith('audio/')) return 'audio';
@@ -115,7 +120,7 @@ class WhatsAppService {
     /**
    * Get file extension from mimetype
    */
-  private getExtensionFromMimeType(mimetype: string): string {
+  public getExtensionFromMimeType(mimetype: string): string {
     const extensions: Record<string, string> = {
       'image/jpeg': '.jpg',
       'image/png': '.png',
@@ -237,11 +242,10 @@ class WhatsAppService {
             const contact = await message.getContact();
             const senderName = contact.pushname || contact.number;
 
-            // Create reply message
-            const replyMessage = `Hi @${contact.id.user}, thanks for mentioning me! How can I help?`;
+            const reply = await aiServices(id, message);
 
             // Reply with mention
-            await message.reply(replyMessage, undefined, {
+            await message.reply(reply, undefined, {
               mentions: [contact.id._serialized]
             });
           }

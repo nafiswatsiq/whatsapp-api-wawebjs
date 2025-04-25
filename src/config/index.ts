@@ -9,5 +9,6 @@ export default {
   sessionPath: path.resolve(process.env.SESSION_PATH || './sessions'),
   defaultHeadless: process.env.HEADLESS !== 'false',
   apiKey: process.env.API_KEY || 'your-default-api-key',
-  defaultClientId: 'default-client'
+  defaultClientId: 'default-client',
+  geminiApiKey: process.env.GEMINI_API_KEY || 'your-gemini-api-key',
 };

@@ -33,6 +33,7 @@ PORT=3000
 SESSION_PATH=./sessions
 HEADLESS=true
 API_KEY=your-api-key-change-this-in-production
+GEMINI_API_KEY=
 ```
 
 4. Build the TypeScript code:
@@ -97,6 +98,11 @@ curl -X POST http://localhost:3000/api/client/my-client/message \
     "message": "Hello from the API!"
   }'
 ```
+
+## Using AI
+- get api key from https://aistudio.google.com/
+- tag client on group
+- use /new or /baru for new conversation
 
 ## License
 
