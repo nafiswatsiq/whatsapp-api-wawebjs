@@ -81,7 +81,8 @@ async function generateFromImage(filePath: string): Promise<string> {
 }
 
 export async function aiServices(clientId: string, message: Message): Promise<string> {
-  const logPrompt = path.join(PROMPT_LOG_DIR, `${clientId}-prompt.json`);
+  const from = message.from.replace(/@c\.us|@g\.us/g, '');
+  const logPrompt = path.join(PROMPT_LOG_DIR, `${from}-prompt.json`);
   const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
   const messageBody = message.body.replace(/@\w+/g, '');
   let responseImageGenerate = '';
