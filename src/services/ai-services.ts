@@ -8,11 +8,6 @@ import WhatsAppService from "./whatsapp";
 const PROMPT_LOG_DIR = path.join(process.cwd(), 'prompt-logs');
 const MEDIA_DIR = path.join(process.cwd(), 'media');
 
-// Ensure prompt logs directory exists
-if (!fs.existsSync(PROMPT_LOG_DIR)) {
-  fs.mkdirSync(PROMPT_LOG_DIR, { recursive: true });
-}
-
 // Interface for conversation history
 interface ConversationMessage {
   role: 'user' | 'model';
