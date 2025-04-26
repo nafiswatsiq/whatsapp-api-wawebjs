@@ -11,6 +11,8 @@ A robust WhatsApp API bot built with TypeScript, Express, and whatsapp-web.js th
 - 👤 Mention users in messages
 - 🔄 Connection status monitoring
 - 🔒 API key authentication
+- ✨ AI conversation
+- 🪄 AI image generate
 
 ## Prerequisites
 
@@ -29,6 +31,7 @@ npm install
 3. Create a `.env` file based on the example:
 
 ```
+APP_URL=http://localhost:3000
 PORT=3000
 SESSION_PATH=./sessions
 HEADLESS=true
