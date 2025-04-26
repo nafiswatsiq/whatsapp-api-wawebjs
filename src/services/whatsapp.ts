@@ -243,11 +243,14 @@ class WhatsAppService {
             const senderName = contact.pushname || contact.number;
 
             const reply = await aiServices(id, message);
-
-            // Reply with mention
-            await message.reply(reply, undefined, {
-              mentions: [contact.id._serialized]
-            });
+            if (reply.isText) {
+              // Reply with mention
+              await message.reply(reply.response, undefined, {
+                mentions: [contact.id._serialized]
+              });
+            } else {
+              this.sendGroupMedia(id, chat.id._serialized, reply.response, '', message.id._serialized);
+            }
           }
         }
       } catch (error) {

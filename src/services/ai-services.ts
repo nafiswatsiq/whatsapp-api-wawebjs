@@ -1,4 +1,4 @@
-import { createPartFromUri, createUserContent, GoogleGenAI } from "@google/genai";
+import { createPartFromUri, createUserContent, GoogleGenAI, Modality } from "@google/genai";
 import { Message } from "whatsapp-web.js";
 import config from "../config";
 import path from "path";
@@ -75,7 +75,69 @@ async function generateFromImage(filePath: string): Promise<string> {
   }
 }
 
-export async function aiServices(clientId: string, message: Message): Promise<string> {
+async function generateImage(prompt: string){
+  try {
+    const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-exp-image-generation",
+      contents: prompt,
+      config: {
+        responseModalities: [Modality.TEXT, Modality.IMAGE],
+      },
+    });
+
+    if (!response.candidates || !response.candidates[0] || !response.candidates[0].content || !response.candidates[0].content.parts) {
+      return {
+        isText: true,
+        result: 'Sorry, no valid response was generated.'
+      }
+    }
+
+    for (const part of response.candidates[0].content.parts) {
+      // Based on the part type, either show the text or save the image
+      if (part.text) {
+        return {
+          isText: true,
+          result: part.text,
+        }
+      } else if (part.inlineData && part.inlineData.data) {
+        const imageData = part.inlineData.data;
+        // Create ai-generated folder if it doesn't exist
+        const aiGeneratedDir = path.join(MEDIA_DIR, 'ai-generated');
+        if (!fs.existsSync(aiGeneratedDir)) {
+          fs.mkdirSync(aiGeneratedDir, { recursive: true });
+        }
+        
+        // Generate unique filename using timestamp
+        const filename = `gemini-image-${Date.now()}.png`;
+        const filePath = path.join(aiGeneratedDir, filename);
+        
+        // Save the image
+        const buffer = Buffer.from(imageData, "base64");
+        fs.writeFileSync(filePath, buffer);
+
+        return {
+          isText: false,
+          result: `${config.appUrl}/media/ai-generated/${filename}`
+        }
+      } else {
+        return {
+          isText: true,
+          result: 'Sorry, no valid response was generated.'
+        }
+      }
+    }
+  } catch (error) { 
+    console.error('Error generating image:', error);
+    return {
+      isText: true,
+      result: 'Sorry, I encountered an error generating the image.'
+    }
+  }
+}
+
+export async function aiServices(clientId: string, message: Message): Promise<{isText: boolean, response: string}> {
   const from = message.from.replace(/@c\.us|@g\.us/g, '');
   const logPrompt = path.join(PROMPT_LOG_DIR, `${from}-prompt.json`);
   const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
@@ -107,7 +169,56 @@ export async function aiServices(clientId: string, message: Message): Promise<st
       
       await saveConversationHistory(logPrompt, formattedHistory);
       
-      return response.text || 'Sorry, no response was generated.';
+      return {
+        isText: true,
+        response: response.text || 'Sorry, no response was generated.'
+      }
+    }
+
+    // Check for image generation commands
+    const imageGenerationTriggers = [
+      'buat gambar',
+      'create image',
+      'buatkan gambar',
+      '/gambar',
+      '/buat-gambar'
+    ];
+
+    if (imageGenerationTriggers.some(trigger => messageBody.toLowerCase().includes(trigger))) {
+      // Extract the prompt by removing the command
+      let imagePrompt = messageBody;
+      for (const trigger of imageGenerationTriggers) {
+        imagePrompt = imagePrompt.replace(new RegExp(trigger, 'i'), '').trim();
+      }
+      
+      if (imagePrompt) {
+        const result = await generateImage(imagePrompt);
+        if (!result) {
+          return {
+            isText: true,
+            response: "Sorry, I encountered an error generating the image."
+          }
+        }
+        
+        if (!result.isText) {
+          // Return the path to the generated image
+          return {
+            isText: false,
+            response: result.result
+          };
+        } else {
+          // Return the error message
+          return {
+            isText: true,
+            response: result.result
+          }
+        }
+      } else {
+        return {
+          isText: true,
+          response: "Please provide a description for the image you want me to generate."
+        }
+      }
     }
     
     // Regular chat flow
@@ -119,7 +230,10 @@ export async function aiServices(clientId: string, message: Message): Promise<st
 
       responseImageGenerate = await generateFromImage(filePath);
       if (messageBody.trim() === '') {
-        return responseImageGenerate;
+        return {
+          isText: true,
+          response: responseImageGenerate
+        };
       }
     }
     
@@ -146,9 +260,15 @@ export async function aiServices(clientId: string, message: Message): Promise<st
     // Save the updated history
     await saveConversationHistory(logPrompt, formattedHistory);
     
-    return response.text || 'Sorry, no response was generated.';
+    return {
+      isText: true,
+      response: response.text || 'Sorry, no response was generated.'
+    };
   } catch (error) {
     console.error('Error in AI service:', error);
-    return 'Sorry, I encountered an error processing your request.';
+    return {
+      isText: true,
+      response: 'Sorry, I encountered an error processing your request.'
+    }
   }
 }

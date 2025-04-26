@@ -3,6 +3,7 @@ import cors from 'cors';
 import morgan from 'morgan';
 import apiRoutes from './routes/api';
 import { errorHandler } from './middlewares';
+import path from 'path';
 
 const app = express();
 
@@ -11,6 +12,8 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan('dev'));
+
+app.use('/media', express.static(path.join(process.cwd(), 'media')));
 
 // root route
 app.get('/', (req, res) => {
