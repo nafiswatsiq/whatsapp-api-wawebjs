@@ -1,0 +1,26 @@
+name: Deploy Node.js to VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.PRIVATE_KEY }}
+          script: |
+            cd /root/project/whatsapp-api-wawebjs
+            git pull origin main
+            npm install
+            pm2 reload all || pm2 start npm --name "whatsapp-api-bot" -- start
