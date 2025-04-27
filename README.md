@@ -12,7 +12,7 @@ A robust WhatsApp API bot built with TypeScript, Express, and whatsapp-web.js th
 - 🔄 Connection status monitoring
 - 🔒 API key authentication
 - ✨ AI conversation
-- 🪄 AI image generate
+- 🪄 AI image generate and Edit Image generate
 
 ## Prerequisites
 

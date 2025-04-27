@@ -81,7 +81,7 @@ async function generateImage(prompt: string){
 
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash-exp-image-generation",
-      contents: prompt,
+      contents: `Generate an image ${prompt}`,
       config: {
         responseModalities: [Modality.TEXT, Modality.IMAGE],
       },
@@ -134,6 +134,80 @@ async function generateImage(prompt: string){
       isText: true,
       result: 'Sorry, I encountered an error generating the image.'
     }
+  }
+}
+
+async function imegeEdit(filePath: string, prompt: string): Promise<{isText: boolean, result: string}> {
+  try {
+    const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+    const imageData = fs.readFileSync(filePath);
+    const base64Image = imageData.toString("base64");
+
+    const contents = [
+      { text: `update the image ${prompt}` },
+      {
+        inlineData: {
+          mimeType: "image/png",
+          data: base64Image,
+        },
+      },
+    ];
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash-exp-image-generation",
+      contents: contents,
+      config: {
+        responseModalities: [Modality.TEXT, Modality.IMAGE],
+      },
+    });
+
+    if (!response.candidates || !response.candidates[0] || !response.candidates[0].content || !response.candidates[0].content.parts) {
+      return {
+        isText: true,
+        result: 'Sorry, no valid response was generated.'
+      }
+    }
+
+    for (const part of response.candidates[0].content.parts) {
+      // Based on the part type, either show the text or save the image
+      if (part.text) {
+        return {
+          isText: true,
+          result: part.text,
+        }
+      } else if (part.inlineData && part.inlineData.data) {
+        const imageData = part.inlineData.data;
+        // Create ai-generated folder if it doesn't exist
+        const aiGeneratedDir = path.join(MEDIA_DIR, 'ai-generated');
+        if (!fs.existsSync(aiGeneratedDir)) {
+          fs.mkdirSync(aiGeneratedDir, { recursive: true });
+        }
+        
+        // Generate unique filename using timestamp
+        const filename = `gemini-image-${Date.now()}.png`;
+        const filePath = path.join(aiGeneratedDir, filename);
+        
+        // Save the image
+        const buffer = Buffer.from(imageData, "base64");
+        fs.writeFileSync(filePath, buffer);
+
+        return {
+          isText: false,
+          result: `${config.appUrl}/media/ai-generated/${filename}`
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error generating from image:', error);
+    return {
+      isText: true,
+      result: 'Sorry, I encountered an error processing the image.'
+    };
+  }
+
+  return {
+    isText: true,
+    result: 'Sorry, I encountered an error processing the image.'
   }
 }
 
@@ -226,14 +300,60 @@ export async function aiServices(clientId: string, message: Message): Promise<{i
     const history = await loadConversationHistory(logPrompt);
 
     if (message.hasMedia) {
-      const filePath = await getFilePath(clientId, message);
-
-      responseImageGenerate = await generateFromImage(filePath);
-      if (messageBody.trim() === '') {
-        return {
-          isText: true,
-          response: responseImageGenerate
-        };
+      const imageEditTriggers = [
+        'ubah gambar',
+        'edit gambar',
+        'edit image',
+        '/edit-gambar',
+        '/ubah-gambar',
+        '/edit-image',
+      ]
+      if (imageEditTriggers.some(trigger => messageBody.toLowerCase().includes(trigger))) {
+        // Extract the prompt by removing the command
+        let imagePrompt = messageBody;
+        for (const trigger of imageEditTriggers) {
+          imagePrompt = imagePrompt.replace(new RegExp(trigger, 'i'), '').trim();
+        }
+        
+        if (imagePrompt) {
+          const filePath = await getFilePath(clientId, message);
+          const result = await imegeEdit(filePath, imagePrompt);
+          if (!result) {
+            return {
+              isText: true,
+              response: "Sorry, I encountered an error generating the image."
+            }
+          }
+          
+          if (!result.isText) {
+            // Return the path to the generated image
+            return {
+              isText: false,
+              response: result.result
+            };
+          } else {
+            // Return the error message
+            return {
+              isText: true,
+              response: result.result
+            }
+          }
+        } else {
+          return {
+            isText: true,
+            response: "Please provide a description for the image you want me to generate."
+          }
+        }
+      } else {
+        const filePath = await getFilePath(clientId, message);
+  
+        responseImageGenerate = await generateFromImage(filePath);
+        if (messageBody.trim() === '') {
+          return {
+            isText: true,
+            response: responseImageGenerate
+          };
+        }
       }
     }
     
