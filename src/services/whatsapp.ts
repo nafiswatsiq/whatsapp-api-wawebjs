@@ -5,6 +5,8 @@ import path from 'path';
 import config from '../config';
 import { WhatsAppClient, ClientInfo, DownloadedMedia, MessageLog } from '../types';
 import { aiServices } from './ai-services';
+import { getClientWebhookUrl, getWebhookUrl } from '../utils/webhookUrl';
+import axios from 'axios';
 
 class WhatsAppService {
   private clients: Map<string, WhatsAppClient>;
@@ -12,6 +14,7 @@ class WhatsAppService {
   private readonly MEDIA_DIR = path.join(process.cwd(), 'media');
   private readonly LOGS_DIR = path.join(process.cwd(), 'logs');
   private readonly PROMPT_LOG_DIR = path.join(process.cwd(), 'prompt-logs');
+  private readonly CLIENT_WEBHOOKS = path.join(process.cwd(), 'client-webhooks');
 
   constructor() {
     this.clients = new Map();
@@ -31,6 +34,9 @@ class WhatsAppService {
     }
     if (!fs.existsSync(this.PROMPT_LOG_DIR)) {
       fs.mkdirSync(this.PROMPT_LOG_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(this.CLIENT_WEBHOOKS)) {
+      fs.mkdirSync(this.CLIENT_WEBHOOKS, { recursive: true });
     }
   }
 
@@ -134,6 +140,55 @@ class WhatsAppService {
     return extensions[mimetype] || '.bin';
   }
 
+  private async webhook(clientId: string, message: Message): Promise<void> {
+    const chat = await message.getChat();
+    const webhookUrl = getWebhookUrl();
+    if (webhookUrl) {
+      const payload = {
+        clientId,
+        id: message.id,
+        from: message.from,
+        to: message.to,
+        author: message.author,
+        body: message.body,
+        timestamp: message.timestamp,
+        type: message.type,
+        isGroup: chat.isGroup,
+      }
+
+      try {
+        await axios.post(webhookUrl, payload);
+        console.log(`Webhook sent to ${webhookUrl}`);
+      } catch (err: any) {
+        console.error(`Fail sending webhook to ${webhookUrl}`, err.message);
+      }
+    }
+  }
+
+  private async webhookClient(clientId: string, message: Message): Promise<void> {
+    const chat = await message.getChat();
+    const webhookUrl = getClientWebhookUrl(clientId);
+    if (webhookUrl) {
+      const payload = {
+        id: message.id,
+        from: message.from,
+        to: message.to,
+        author: message.author,
+        body: message.body,
+        timestamp: message.timestamp,
+        type: message.type,
+        isGroup: chat.isGroup,
+      };
+    
+      try {
+        await axios.post(webhookUrl, payload);
+        console.log(`Webhook sent to ${webhookUrl}`);
+      } catch (err: any) {
+        console.error(`Fail sending webhook to ${webhookUrl}`, err.message);
+      }
+    }
+  }
+
   /**
    * Initialize a WhatsApp client
    */
@@ -222,13 +277,19 @@ class WhatsAppService {
       }, 5000);
     });
 
-    // Handle group messages and mentions
+    // Handle incoming message, group messages and mentions
     client.on('message', async (message) => {
       try {
+        // log message
         await this.logMessage(id, message);
+        // webhook for all messages
+        await this.webhook(id, message);
+        // webhook for all messages by client
+        await this.webhookClient(id, message);
 
-        // Check if message is from a group
         const chat = await message.getChat();
+        // Check if message is from a group
+        // const chat = await message.getChat();
         if (chat.isGroup) {
           const mentions = await message.getMentions();
           

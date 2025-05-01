@@ -12,4 +12,5 @@ export default {
   apiKey: process.env.API_KEY || 'your-default-api-key',
   defaultClientId: 'default-client',
   geminiApiKey: process.env.GEMINI_API_KEY || 'your-gemini-api-key',
+  webhookUrl: process.env.WEBHOOK_URL || null,
 };

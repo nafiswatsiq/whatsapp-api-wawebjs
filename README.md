@@ -13,6 +13,7 @@ A robust WhatsApp API bot built with TypeScript, Express, and whatsapp-web.js th
 - 🔒 API key authentication
 - ✨ AI conversation
 - 🪄 AI image generate and Edit Image generate
+- 🔁 Webhook chat
 
 ## Prerequisites
 
@@ -37,6 +38,7 @@ SESSION_PATH=./sessions
 HEADLESS=true
 API_KEY=your-api-key-change-this-in-production
 GEMINI_API_KEY=
+WEBHOOK_URL=
 ```
 
 4. Build the TypeScript code:
@@ -58,6 +60,15 @@ For development with auto-restart:
 ```bash
 npm run dev
 ```
+
+## Using AI
+- get api key from https://aistudio.google.com/
+- tag client on group
+- use /new or /baru for new conversation
+
+## Using Webhook
+- to get all chat webhook set `WEBHOOK_URL` in `.env`
+- You can get chat webhooks by client by registering a url webhook via the API 
 
 ### API Endpoints
 
@@ -101,12 +112,3 @@ curl -X POST http://localhost:3000/api/client/my-client/message \
     "message": "Hello from the API!"
   }'
 ```
-
-## Using AI
-- get api key from https://aistudio.google.com/
-- tag client on group
-- use /new or /baru for new conversation
-
-## License
-
-MIT

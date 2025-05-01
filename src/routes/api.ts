@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as whatsAppController from '../controllers/whatsapp';
+import * as webhookController from '../controllers/webhook';
 import { apiKeyAuth, validateClientId } from '../middlewares';
 
 const router = Router();
@@ -26,5 +27,10 @@ router.post('/client/:clientId/group/:groupId/media', validateClientId, whatsApp
 // router.post('/client/:clientId/group/:groupId/rename', validateClientId, whatsAppController.renameGroup);
 // router.post('/client/:clientId/group/:groupId/add', validateClientId, whatsAppController.addToGroup);
 // router.post('/client/:clientId/group/:groupId/remove', validateClientId, whatsAppController.removeFromGroup);
+
+// Webhook routes
+router.post('/client/:clientId/webhook', validateClientId, webhookController.addWebhookUrl);
+router.delete('/client/:clientId/webhook', validateClientId, webhookController.deleteWebhookUrl);
+router.get('/client/:clientId/webhook', validateClientId, webhookController.getWebhookUrl);
 
 export default router;
