@@ -59,7 +59,7 @@ async function generateFromImage(filePath: string): Promise<string> {
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: config.geminiTextGenerationModel,
       contents: [
         createUserContent([
           "Ubah gambar ini menjadi teks dengan fokus pada akurasi. Jika ada kesalahan dalam pengenalan karakter, silakan perbaiki.",
@@ -80,7 +80,7 @@ async function generateImage(prompt: string){
     const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp-image-generation",
+      model: config.geminiImageGenerationModel,
       contents: `Generate an image ${prompt}`,
       config: {
         responseModalities: [Modality.TEXT, Modality.IMAGE],
@@ -94,39 +94,38 @@ async function generateImage(prompt: string){
       }
     }
 
-    for (const part of response.candidates[0].content.parts) {
-      // Based on the part type, either show the text or save the image
-      if (part.text) {
-        return {
-          isText: true,
-          result: part.text,
-        }
-      } else if (part.inlineData && part.inlineData.data) {
-        const imageData = part.inlineData.data;
-        // Create ai-generated folder if it doesn't exist
-        const aiGeneratedDir = path.join(MEDIA_DIR, 'ai-generated');
-        if (!fs.existsSync(aiGeneratedDir)) {
-          fs.mkdirSync(aiGeneratedDir, { recursive: true });
-        }
-        
-        // Generate unique filename using timestamp
-        const filename = `gemini-image-${Date.now()}.png`;
-        const filePath = path.join(aiGeneratedDir, filename);
-        
-        // Save the image
-        const buffer = Buffer.from(imageData, "base64");
-        fs.writeFileSync(filePath, buffer);
-
-        return {
-          isText: false,
-          result: `${config.appUrl}/media/ai-generated/${filename}`
-        }
-      } else {
-        return {
-          isText: true,
-          result: 'Sorry, no valid response was generated.'
-        }
+    // Check for inlineData in any of the parts
+    const parts = response.candidates[0].content.parts;
+    
+    // Find the part with inlineData
+    const inlineDataPart = parts.find(part => part.inlineData && part.inlineData.data);
+    
+    if (inlineDataPart && inlineDataPart.inlineData && inlineDataPart.inlineData.data) {
+      const imageData = inlineDataPart.inlineData.data;
+      
+      // Create ai-generated folder if it doesn't exist
+      const aiGeneratedDir = path.join(MEDIA_DIR, 'ai-generated');
+      if (!fs.existsSync(aiGeneratedDir)) {
+        fs.mkdirSync(aiGeneratedDir, { recursive: true });
       }
+      
+      // Generate unique filename using timestamp
+      const filename = `gemini-image-${Date.now()}.png`;
+      const filePath = path.join(aiGeneratedDir, filename);
+      
+      // Save the image
+      const buffer = Buffer.from(imageData, "base64");
+      fs.writeFileSync(filePath, buffer);
+      
+      return {
+        isText: false,
+        result: `${config.appUrl}/media/ai-generated/${filename}`
+      };
+    } else {
+      return {
+        isText: true,
+        result: 'Sorry, no image was generated.'
+      };
     }
   } catch (error) { 
     console.error('Error generating image:', error);
@@ -154,7 +153,7 @@ async function imegeEdit(filePath: string, prompt: string): Promise<{isText: boo
     ];
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-exp-image-generation",
+      model: config.geminiImageGenerationModel,
       contents: contents,
       config: {
         responseModalities: [Modality.TEXT, Modality.IMAGE],
@@ -168,35 +167,37 @@ async function imegeEdit(filePath: string, prompt: string): Promise<{isText: boo
       }
     }
 
-    for (const part of response.candidates[0].content.parts) {
-      // Based on the part type, either show the text or save the image
-      if (part.text) {
-        return {
-          isText: true,
-          result: part.text,
-        }
-      } else if (part.inlineData && part.inlineData.data) {
-        const imageData = part.inlineData.data;
-        // Create ai-generated folder if it doesn't exist
-        const aiGeneratedDir = path.join(MEDIA_DIR, 'ai-generated');
-        if (!fs.existsSync(aiGeneratedDir)) {
-          fs.mkdirSync(aiGeneratedDir, { recursive: true });
-        }
-        
-        // Generate unique filename using timestamp
-        const filename = `gemini-image-${Date.now()}.png`;
-        const filePath = path.join(aiGeneratedDir, filename);
-        
-        // Save the image
-        const buffer = Buffer.from(imageData, "base64");
-        fs.writeFileSync(filePath, buffer);
-
-        return {
-          isText: false,
-          result: `${config.appUrl}/media/ai-generated/${filename}`
-        }
+    // Check all parts for inlineData
+    const parts = response.candidates[0].content.parts;
+    const inlineDataPart = parts.find(part => part.inlineData && part.inlineData.data);
+    
+    if (inlineDataPart && inlineDataPart.inlineData && inlineDataPart.inlineData.data) {
+      const imageData = inlineDataPart.inlineData.data;
+      
+      // Create ai-generated folder if it doesn't exist
+      const aiGeneratedDir = path.join(MEDIA_DIR, 'ai-generated');
+      if (!fs.existsSync(aiGeneratedDir)) {
+        fs.mkdirSync(aiGeneratedDir, { recursive: true });
       }
+      
+      // Generate unique filename using timestamp
+      const filename = `gemini-image-${Date.now()}.png`;
+      const filePath = path.join(aiGeneratedDir, filename);
+      
+      // Save the image
+      const buffer = Buffer.from(imageData, "base64");
+      fs.writeFileSync(filePath, buffer);
+      
+      return {
+        isText: false,
+        result: `${config.appUrl}/media/ai-generated/${filename}`
+      };
     }
+    
+    return {
+      isText: true,
+      result: 'No image was generated in the response.'
+    };
   } catch (error) {
     console.error('Error generating from image:', error);
     return {
@@ -204,14 +205,9 @@ async function imegeEdit(filePath: string, prompt: string): Promise<{isText: boo
       result: 'Sorry, I encountered an error processing the image.'
     };
   }
-
-  return {
-    isText: true,
-    result: 'Sorry, I encountered an error processing the image.'
-  }
 }
 
-export async function aiServices(clientId: string, message: Message): Promise<{isText: boolean, response: string}> {
+export async function aiGEminiServices(clientId: string, message: Message): Promise<{isText: boolean, response: string}> {
   const from = message.from.replace(/@c\.us|@g\.us/g, '');
   const logPrompt = path.join(PROMPT_LOG_DIR, `${from}-prompt.json`);
   const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
@@ -226,7 +222,7 @@ export async function aiServices(clientId: string, message: Message): Promise<{i
       
       // Create a new chat without history
       const chat = ai.chats.create({
-        model: "gemini-2.0-flash"
+        model: config.geminiTextGenerationModel
       });
       
       // Send a greeting message
@@ -264,7 +260,6 @@ export async function aiServices(clientId: string, message: Message): Promise<{i
       for (const trigger of imageGenerationTriggers) {
         imagePrompt = imagePrompt.replace(new RegExp(trigger, 'i'), '').trim();
       }
-      
       if (imagePrompt) {
         const result = await generateImage(imagePrompt);
         if (!result) {
@@ -359,7 +354,7 @@ export async function aiServices(clientId: string, message: Message): Promise<{i
     
     // Create a chat with history
     const chat = ai.chats.create({
-      model: "gemini-2.0-flash",
+      model: config.geminiTextGenerationModel,
       history: history
     });
 

@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import config from '../config';
 import { WhatsAppClient, ClientInfo, DownloadedMedia, MessageLog } from '../types';
-import { aiServices } from './ai-services';
+import { aiGEminiServices } from './ai-gemini-services';
 import { getClientWebhookUrl, getWebhookUrl } from '../utils/webhookUrl';
 import axios from 'axios';
 
@@ -302,15 +302,23 @@ class WhatsAppService {
             // Get the sender's contact
             const contact = await message.getContact();
             const senderName = contact.pushname || contact.number;
+            
+            if (config.aiService === 'gemini' || config.aiService === 'GEMINI') {
+              const reply = await aiGEminiServices(id, message);
 
-            const reply = await aiServices(id, message);
-            if (reply.isText) {
-              // Reply with mention
-              await message.reply(reply.response, undefined, {
+              if (reply.isText) {
+                // Reply with mention
+                await message.reply(reply.response, undefined, {
+                  mentions: [contact.id._serialized]
+                });
+              } else {
+                this.sendGroupMedia(id, chat.id._serialized, reply.response, '', message.id._serialized);
+              }
+            } else {
+              // Default behavior: reply with mention
+              await message.reply(`@${senderName}, you mentioned me!`, undefined, {
                 mentions: [contact.id._serialized]
               });
-            } else {
-              this.sendGroupMedia(id, chat.id._serialized, reply.response, '', message.id._serialized);
             }
           }
         }
