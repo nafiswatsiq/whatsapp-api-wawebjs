@@ -49,10 +49,12 @@ export async function getStatus(req: Request, res: Response): Promise<void> {
       res.status(404).json(createResponse(false, `Client ${clientId} not found`));
       return;
     }
-    
+
     res.json(createResponse(true, 'Client status retrieved', {
       id: client.id,
       ready: client.ready,
+      lastActivity: client.lastActivity ? new Date(client.lastActivity).toISOString() : undefined,
+      info: client.client.info,
       qrCode: client.qrCode
     }));
   } catch (error: any) {

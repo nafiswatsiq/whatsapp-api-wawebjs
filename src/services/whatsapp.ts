@@ -5,7 +5,7 @@ import path from 'path';
 import config from '../config';
 import { WhatsAppClient, ClientInfo, DownloadedMedia, MessageLog } from '../types';
 import { aiGEminiServices } from './ai-gemini-services';
-import { getClientWebhookUrl, getWebhookUrl } from '../utils/webhookUrl';
+import { getClientWebhookUrl, getWebhookMessageUrl } from '../utils/webhookUrl';
 import axios from 'axios';
 
 class WhatsAppService {
@@ -52,6 +52,20 @@ class WhatsAppService {
           console.log(`Removing inactive client ${clientId}`);
           client.client.destroy();
           this.clients.delete(clientId);
+
+          const webhookUrl = config.webhookInactiveClientUrl;
+          if (webhookUrl) {
+            const payload = {
+              clientId,
+              ready: false,
+              status: 'inactive',
+              lastActivity: new Date(client.lastActivity).toISOString()
+            };
+            
+            axios.post(webhookUrl, payload)
+              .then(() => console.log(`Inactive client webhook sent to ${webhookUrl}`))
+              .catch(err => console.error(`Failed to send inactive client webhook to ${webhookUrl}`, err.message));
+          }
         }
       }
     }, this.CLEANUP_INTERVAL);
@@ -87,7 +101,7 @@ class WhatsAppService {
 
       // Append to log file
       const logEntry = JSON.stringify(log) + '\n';
-      fs.appendFileSync(logFile, logEntry);
+      await fs.appendFileSync(logFile, logEntry);
 
     } catch (error) {
       console.error('Error logging message:', error);
@@ -108,7 +122,7 @@ class WhatsAppService {
     const filePath = path.join(clientDir, filename);
 
     const buffer = Buffer.from(media.data, 'base64');
-    fs.writeFileSync(filePath, buffer);
+    await fs.writeFileSync(filePath, buffer);
 
     return filePath;
   }
@@ -142,7 +156,7 @@ class WhatsAppService {
 
   private async webhook(clientId: string, message: Message): Promise<void> {
     const chat = await message.getChat();
-    const webhookUrl = getWebhookUrl();
+    const webhookUrl = getWebhookMessageUrl();
     if (webhookUrl) {
       const payload = {
         clientId,
@@ -192,12 +206,17 @@ class WhatsAppService {
   /**
    * Initialize a WhatsApp client
    */
-  public initClient(clientId: string): void {
+  public async initClient(clientId: string): Promise<void> {
     // If client exists, destroy it first
     if (this.clients.has(clientId)) {
       const existingClient = this.clients.get(clientId);
       if (existingClient) {
-        existingClient.client.destroy();
+        console.log(`Destroying existing client ${clientId} before re-initializing.`);
+        try {
+          await existingClient.client.destroy(); // Tambah await
+        } catch (e) {
+          console.error(`Error destroying existing client ${clientId}:`, e);
+        }
         this.clients.delete(clientId);
       }
     }
@@ -209,7 +228,14 @@ class WhatsAppService {
       }),
       puppeteer: {
         headless: config.defaultHeadless,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas', '--disable-gpu']
+        args: [
+          '--no-sandbox', 
+          '--disable-setuid-sandbox', 
+          '--disable-dev-shm-usage', 
+          '--disable-accelerated-2d-canvas', 
+          '--disable-gpu',
+          '--single-process'
+        ]
       }
     });
 
@@ -242,6 +268,17 @@ class WhatsAppService {
         const qrImage = await QRCode.toDataURL(qr);
         whatsappClient.qrCode = qrImage;
         whatsappClient.lastActivity = Date.now();
+
+        const webhookUrl = config.webhookQrUrl;
+        if (webhookUrl) {
+          const payload = {
+            clientId: id,
+            qrCode: qrImage
+          };
+          
+          await axios.post(webhookUrl, payload);
+          console.log(`QR code webhook sent to ${webhookUrl}`);
+        }
       } catch (error) {
         console.error(`Failed to generate QR code for client ${id}:`, error);
       }
@@ -257,6 +294,18 @@ class WhatsAppService {
     client.on('authenticated', () => {
       console.log(`Client ${id} authenticated successfully`);
       whatsappClient.lastActivity = Date.now();
+
+      const webhookUrl = config.webhookAuthenticatedUrl;
+      if (webhookUrl) {
+        const payload = {
+          clientId: id,
+          ready: true
+        };
+        
+        axios.post(webhookUrl, payload)
+          .then(() => console.log(`Authentication webhook sent to ${webhookUrl}`))
+          .catch(err => console.error(`Failed to send authentication webhook to ${webhookUrl}`, err.message));
+      }
     });
 
     client.on('auth_failure', (msg) => {
@@ -267,14 +316,32 @@ class WhatsAppService {
     client.on('disconnected', (reason) => {
       console.log(`Client ${id} disconnected:`, reason);
       whatsappClient.ready = false;
+
+      const webhookUrl = config.webhookDisconnectedUrl;
+      if (webhookUrl) {
+        const payload = {
+          clientId: id,
+          ready: false,
+          reason: reason
+        };
       
-      // Attempt to reconnect after a delay
-      setTimeout(() => {
-        console.log(`Attempting to reconnect client ${id}...`);
-        client.initialize().catch(error => {
-          console.error(`Failed to reconnect client ${id}:`, error);
-        });
-      }, 5000);
+        axios.post(webhookUrl, payload)
+          .then(() => console.log(`Disconnected webhook sent to ${webhookUrl}`))
+          .catch(err => console.error(`Failed to send authentication webhook to ${webhookUrl}`, err.message));
+      }
+      
+      if (reason !== 'LOGOUT') {
+        setTimeout(() => {
+          console.log(`Attempting to reconnect client ${id}...`);
+          client.initialize().catch(error => {
+            console.error(`Failed to reconnect client ${id}:`, error);
+          });
+        }, 5000);
+      } else {
+        // Jika sesi tidak valid, hapus klien agar bisa di-scan ulang
+        console.log(`Client ${id} session is invalid. Removing client.`);
+        this.clients.delete(id);
+      }
     });
 
     // Handle incoming message, group messages and mentions

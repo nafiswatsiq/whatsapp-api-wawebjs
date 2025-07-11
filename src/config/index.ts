@@ -15,5 +15,9 @@ export default {
   geminiApiKey: process.env.GEMINI_API_KEY || 'your-gemini-api-key',
   geminiTextGenerationModel: process.env.GEMINI_TEXT_GENERATION_MODEL || 'gemini-2.5-flash',
   geminiImageGenerationModel: process.env.GEMINI_IMAGE_GENERATION_MODEL || 'gemini-2.0-flash-preview-image-generation',
-  webhookUrl: process.env.WEBHOOK_URL || null,
+  webhookMesageUrl: process.env.WEBHOOK_MESSAGE_URL || null,
+  webhookQrUrl: process.env.WEBHOOK_QR_URL || null,
+  webhookAuthenticatedUrl: process.env.WEBHOOK_AUTHENTICATED_URL || null,
+  webhookDisconnectedUrl: process.env.WEBHOOK_DISCONNECTED_URL || null,
+  webhookInactiveClientUrl: process.env.WEBHOOK_INACTIVE_CLIENT_URL || null,
 };

@@ -2,8 +2,8 @@ import path from "path";
 import fs from "fs";
 import config from "../config";
 
-export function getWebhookUrl() {
-  return config.webhookUrl;
+export function getWebhookMessageUrl() {
+  return config.webhookMesageUrl;
 }
 
 export function getClientWebhookUrl(clientId: string) {
