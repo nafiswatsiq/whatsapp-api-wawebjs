@@ -379,7 +379,6 @@ class WhatsAppService {
     // Handle incoming message, group messages and mentions
     client.on('message', async (message) => {
       try {
-        console.log(`Received message from ${message.from}: ${message.body}`);
         // log message
         await this.logMessage(id, message);
         // webhook for all messages
