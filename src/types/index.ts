@@ -6,6 +6,7 @@ export interface WhatsAppClient {
   ready: boolean;
   qrCode?: string;
   lastActivity?: number;
+  initTimestamp: number;
 }
 
 export interface SendMessageRequest {

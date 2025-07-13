@@ -44,34 +44,44 @@ class WhatsAppService {
    * Start cleanup interval for inactive clients
    */
   private startCleanupInterval(): void {
-    setInterval(() => {
+    setInterval(async () => {
       const now = Date.now();
-      for (const [clientId, client] of this.clients.entries()) {
-        // Remove client if it's not ready and hasn't been authenticated within cleanup interval
-        if (!client.ready && client.lastActivity && (now - client.lastActivity) > this.CLEANUP_INTERVAL) {
-          console.log(`Removing inactive client ${clientId}`);
-          client.client.destroy();
-          this.clients.delete(clientId);
+      for (const [clientId, clientData] of [...this.clients.entries()]) {
+        if (clientData.ready) {
+          continue;
+        }
+        // PERIKSA: Apakah klien yang belum ready ini sudah dibuat lebih dari 2 menit yang lalu?
+        // gunakan `initTimestamp` yang tidak pernah direset.
+        if ((now - clientData.initTimestamp) > this.CLEANUP_INTERVAL) {
+          console.log(`[CLEANUP] Removing client ${clientId}. QR code not scanned within ${this.CLEANUP_INTERVAL / 1000} seconds.`);
+          try {
+            await clientData.client.destroy();
+            this.clients.delete(clientId); // Hapus dari daftar setelah berhasil dihancurkan.
 
-          const webhookUrl = config.webhookInactiveClientUrl;
-          if (webhookUrl) {
-            const payload = {
-              clientId,
-              ready: false,
-              status: 'inactive',
-              lastActivity: new Date(client.lastActivity).toISOString()
-            };
-            
-            axios.post(webhookUrl, payload)
-              .then(() => console.log(`Inactive client webhook sent to ${webhookUrl}`))
-              .catch(err => console.error(`Failed to send inactive client webhook to ${webhookUrl}`, err.message));
+            // Kirim webhook jika dikonfigurasi.
+            const webhookUrl = config.webhookInactiveClientUrl;
+            if (webhookUrl) {
+              const payload = {
+                clientId,
+                ready: false,
+                status: 'inactive_timeout'
+              };
+              
+              axios.post(webhookUrl, payload)
+                .then(() => console.log(`[CLEANUP] Inactive client webhook sent to ${webhookUrl}`))
+                .catch(err => console.error(`[CLEANUP] Failed to send inactive client webhook:`, err.message));
+            }
+          } catch (error: any) {
+            console.error(`[CLEANUP] Error destroying inactive client ${clientId}:`, error.message);
+            // Tetap hapus dari daftar untuk menghindari upaya berulang pada klien yang bermasalah.
+            this.clients.delete(clientId);
           }
         }
       }
     }, this.CLEANUP_INTERVAL);
   }
 
-    /**
+  /**
    * Log a message to file
    */
   private async logMessage(clientId: string, message: Message): Promise<void> {
@@ -154,10 +164,12 @@ class WhatsAppService {
     return extensions[mimetype] || '.bin';
   }
 
-  private async webhook(clientId: string, message: Message): Promise<void> {
-    const chat = await message.getChat();
+  private async webhook(clientId: string, message: Message, client: Client): Promise<void> {
     const webhookUrl = getWebhookMessageUrl();
     if (webhookUrl) {
+      const chat = await message.getChat();
+      const mentions = await message.getMentions();
+
       const payload = {
         clientId,
         id: message.id,
@@ -168,6 +180,11 @@ class WhatsAppService {
         timestamp: message.timestamp,
         type: message.type,
         isGroup: chat.isGroup,
+        isMentioned: mentions.find(m => m.id._serialized === client.info.wid._serialized) !== undefined,
+        mentions: mentions.map(m => ({
+          id: m.id._serialized,
+          name: m.pushname || m.id.user
+        }))
       }
 
       try {
@@ -179,11 +196,13 @@ class WhatsAppService {
     }
   }
 
-  private async webhookClient(clientId: string, message: Message): Promise<void> {
-    const chat = await message.getChat();
+  private async webhookClient(clientId: string, message: Message, client: Client): Promise<void> {
     const webhookUrl = getClientWebhookUrl(clientId);
     if (webhookUrl) {
+      const chat = await message.getChat();
+      const mentions = await message.getMentions();
       const payload = {
+        clientId,
         id: message.id,
         from: message.from,
         to: message.to,
@@ -192,6 +211,11 @@ class WhatsAppService {
         timestamp: message.timestamp,
         type: message.type,
         isGroup: chat.isGroup,
+        isMentioned: mentions.find(m => m.id._serialized === client.info.wid._serialized) !== undefined,
+        mentions: mentions.map(m => ({
+          id: m.id._serialized,
+          name: m.pushname || m.id.user
+        }))
       };
     
       try {
@@ -233,8 +257,7 @@ class WhatsAppService {
           '--disable-setuid-sandbox', 
           '--disable-dev-shm-usage', 
           '--disable-accelerated-2d-canvas', 
-          '--disable-gpu',
-          '--single-process'
+          '--disable-gpu'
         ]
       }
     });
@@ -243,7 +266,8 @@ class WhatsAppService {
       id: clientId,
       client,
       ready: false,
-      lastActivity: Date.now()
+      lastActivity: Date.now(),
+      initTimestamp: Date.now()
     };
 
     this.setupClientEvents(whatsappClient);
@@ -313,8 +337,8 @@ class WhatsAppService {
       whatsappClient.ready = false;
     });
 
-    client.on('disconnected', (reason) => {
-      console.log(`Client ${id} disconnected:`, reason);
+    client.on('disconnected', async (reason) => {
+      console.log(`Client ${id} disconnected, reason:`, reason);
       whatsappClient.ready = false;
 
       const webhookUrl = config.webhookDisconnectedUrl;
@@ -327,32 +351,41 @@ class WhatsAppService {
       
         axios.post(webhookUrl, payload)
           .then(() => console.log(`Disconnected webhook sent to ${webhookUrl}`))
-          .catch(err => console.error(`Failed to send authentication webhook to ${webhookUrl}`, err.message));
+          .catch(err => console.error(`Failed to send disconnected webhook to ${webhookUrl}`, err.message));
       }
       
       if (reason !== 'LOGOUT') {
         setTimeout(() => {
           console.log(`Attempting to reconnect client ${id}...`);
           client.initialize().catch(error => {
+            client.destroy();
+            this.clients.delete(id);
             console.error(`Failed to reconnect client ${id}:`, error);
           });
         }, 5000);
       } else {
         // Jika sesi tidak valid, hapus klien agar bisa di-scan ulang
         console.log(`Client ${id} session is invalid. Removing client.`);
+        try {
+          await client.destroy();
+        } catch (e: any) {
+          console.error(`Error during client destruction on disconnect: ${e.message}`);
+        }
         this.clients.delete(id);
       }
+      
     });
 
     // Handle incoming message, group messages and mentions
     client.on('message', async (message) => {
       try {
+        console.log(`Received message from ${message.from}: ${message.body}`);
         // log message
         await this.logMessage(id, message);
         // webhook for all messages
-        await this.webhook(id, message);
+        await this.webhook(id, message, client);
         // webhook for all messages by client
-        await this.webhookClient(id, message);
+        await this.webhookClient(id, message, client);
 
         const chat = await message.getChat();
         // Check if message is from a group
