@@ -57,7 +57,7 @@ export async function getWebhookUrl(req: Request, res: Response): Promise<void> 
   }
 }
 
-export async function testCallback(req: Request, res: Response): Promise<void> {
+export async function testWebhook(req: Request, res: Response): Promise<void> {
   try {
     const { webhookUrl } = req.body;
 

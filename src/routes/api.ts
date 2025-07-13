@@ -33,6 +33,6 @@ router.post('/client/:clientId/webhook', validateClientId, webhookController.add
 router.delete('/client/:clientId/webhook', validateClientId, webhookController.deleteWebhookUrl);
 router.get('/client/:clientId/webhook', validateClientId, webhookController.getWebhookUrl);
 
-router.post('/test-callback', webhookController.testCallback);
+router.post('/test-webhook', webhookController.testWebhook);
 
 export default router;
