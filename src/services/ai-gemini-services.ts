@@ -227,7 +227,7 @@ export async function aiGEminiServices(clientId: string, message: Message): Prom
       
       // Send a greeting message
       const response = await chat.sendMessage({
-        message: "Hai Sapa aku!, dan tanyakan apakah saya bisa membantu? (jawab dengan hangat)"
+        message: "Hai Sapa aku!, dan tanyakan apakah saya bisa membantu? (ingat untuk seterusnya jawab seperti pesan whatsapp, jadi jangan jawab seperti AI, tapi jawab seperti manusia yang sedang chat di whatsapp)"
       });
       
       // Get and save the initial chat history
